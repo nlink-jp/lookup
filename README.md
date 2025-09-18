@@ -17,7 +17,7 @@ The tool reads JSON objects (either as a JSON Array or as JSON Lines) from stand
 -   **Flexible Configuration**: A central JSON configuration file separates lookup logic from your data, allowing for complex matching rules.
 -   **Built-in DNS Lookup**: Perform forward (`A` record) or reverse (`PTR` record) DNS lookups as a native feature.
     -   Optionally specify a custom DNS server for queries.
--   **Flexible Field Mapping**: Intuitive syntax (`input_field as lookup_field OUTPUT out1 as new1, ...`) to control which fields are matched and how new fields are named.
+-   **Flexible Field Mapping**: Intuitive syntax (`<config_ref_field> as <input_field> OUTPUT out1 as new1, ...`) to control which fields are matched and how new fields are named.
 -   **Handles Multiple Input Formats**: Automatically detects and processes both **JSON Array** and **JSON Lines (JSONL)** from stdin.
 -   **Cross-Platform**: Written in Go, it compiles to a single binary with no external dependencies, running on Linux, macOS, and Windows.
 
@@ -121,7 +121,7 @@ The configuration file is the heart of `lookup-go`, defining where your data is 
 
 -   **`data_source`**: (string) The relative or absolute path to your lookup data file (CSV or JSON).
 -   **`matchers`**: (array) A list of objects, where each object defines a specific matching rule.
-    -   **`input_field`**: The field name from the incoming JSON stream to use for the lookup.
+    -   **`input_field`**: A name for this lookup rule. This is what you refer to in the `-m` flag.
     -   **`lookup_field`**: The column/key name in your `data_source` file to match against.
     -   **`method`**: The matching algorithm to use. Supported values:
         -   `"exact"` (default)
@@ -139,13 +139,13 @@ The `-m` flag defines the link between the input stream and the lookup table, an
 ### Format
 
 ```
-"INPUT_FIELD as LOOKUP_FIELD [OUTPUT original_name1 as new_name1, original_name2 as new_name2]"
+"CONFIG_REF_FIELD as INPUT_FIELD [OUTPUT original_name1 as new_name1, original_name2 as new_name2]"
 ```
 
--   **`INPUT_FIELD as LOOKUP_FIELD`**: (Required)
-    -   This part tells `lookup-go` which matcher rule to use from your `config.json`.
-    -   `INPUT_FIELD` must match an `input_field` in one of your matchers.
-    -   `LOOKUP_FIELD` must match the corresponding `lookup_field` in that same matcher.
+-   **`CONFIG_REF_FIELD as INPUT_FIELD`**: (Required)
+    -   This part defines which matcher to use and which field from the input stream to get the value from.
+    -   `CONFIG_REF_FIELD` must match an `input_field` in one of your matchers in `config.json`.
+    -   `INPUT_FIELD` is the name of the field in the incoming JSON object to use for the lookup.
 -   **`OUTPUT ...`**: (Optional)
     -   This clause controls which fields from the lookup file are added to the output and allows you to rename them.
     -   If the `OUTPUT` clause is **omitted**, all columns from the matched row in the lookup file are added to the JSON object with their original names.
@@ -173,23 +173,23 @@ b-*,Engineering,QA,B,10.0.0.0/8
   "data_source": "./users.csv",
   "matchers": [
     {
-      "input_field": "user",
+      "input_field": "user_lookup",
       "lookup_field": "username",
       "method": "exact",
       "case_sensitive": false
     },
     {
-      "input_field": "hostname",
+      "input_field": "host_lookup",
       "lookup_field": "username",
       "method": "wildcard"
     },
     {
-      "input_field": "process",
+      "input_field": "process_lookup",
       "lookup_field": "username",
       "method": "regex"
     },
     {
-      "input_field": "client_ip",
+      "input_field": "ip_lookup",
       "lookup_field": "ip_range",
       "method": "cidr"
     }
@@ -208,12 +208,12 @@ b-*,Engineering,QA,B,10.0.0.0/8
 
 ### Example 1: Case-Insensitive `exact` Match
 
-Match the `user` field from the input against the `username` column in the CSV, and output the `department` and `role` fields.
+Match the `user` field from the input using the `user_lookup` rule, and output the `department` and `role` fields.
 
 ```sh
 cat input.jsonl | ./lookup-go \
   -c lookup_config.json \
-  -m "user as username OUTPUT department as dept, role"
+  -m "user_lookup as user OUTPUT department as dept, role"
 ```
 
 **Output (for the first line):**
@@ -223,12 +223,12 @@ cat input.jsonl | ./lookup-go \
 
 ### Example 2: `cidr` Match
 
-Match the `client_ip` against the `ip_range` CIDR blocks. We will omit the `OUTPUT` clause to add all fields from the matched CSV row.
+Match the `client_ip` using the `ip_lookup` rule. We will omit the `OUTPUT` clause to add all fields from the matched CSV row.
 
 ```sh
 cat input.jsonl | ./lookup-go \
   -c lookup_config.json \
-  -m "client_ip as ip_range"
+  -m "ip_lookup as client_ip"
 ```
 
 **Output (for the fourth line):**
@@ -244,7 +244,7 @@ Perform a reverse DNS lookup on the `client_ip` field.
 ```sh
 cat input.jsonl | ./lookup-go \
   --dns \
-  -m "client_ip as ignored OUTPUT hostname as resolved_host"
+  -m "dns_reverse_lookup as client_ip OUTPUT hostname as resolved_host"
 ```
 
 **Command (using a custom DNS server):**
@@ -252,7 +252,7 @@ cat input.jsonl | ./lookup-go \
 cat input.jsonl | ./lookup-go \
   --dns \
   --dns-server "8.8.8.8" \
-  -m "client_ip as ignored OUTPUT hostname as resolved_host"
+  -m "dns_reverse_lookup as client_ip OUTPUT hostname as resolved_host"
 ```
 
 **Output (for the last line, may vary):**

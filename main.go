@@ -35,9 +35,9 @@ type Matcher struct {
 
 // Mapping はコマンドライン引数 -m のパース結果を保持します。
 type Mapping struct {
-	InputField  string
-	LookupField string
-	OutputMap   map[string]string // Key: original output field, Value: new field name
+	ConfigRefField string            // config.jsonのinput_fieldを参照するためのキー
+	InputField     string            // 入力JSONから値を取得するためのキー
+	OutputMap      map[string]string // Key: original output field, Value: new field name
 }
 
 // LookupData はCSVやJSONから読み込んだデータの汎用的な表現です。
@@ -90,19 +90,20 @@ Options:
 		fmt.Fprintf(os.Stderr, `
 Mapping Rule (-m):
   The mapping rule defines which fields to use for the lookup and how to map the output fields.
-  Format: "<input_field> as <lookup_field> OUTPUT <source_field1> as <target_field1>, <source_field2> as <target_field2>, ..."
+  Format: "<config_ref_field> as <input_field> OUTPUT <source_field1> as <target_field1>, <source_field2> as <target_field2>, ..."
 
-  - <input_field>:  Field name in the stdin JSON to use for the lookup.
-  - <lookup_field>: Field name in the data source to match against.
-  - OUTPUT:         Keyword to start defining output field mappings.
-  - <source_field>: Field name from the data source to append to the output.
-  - <target_field>: New field name for the appended data. If "as <target_field>" is omitted,
-                    the source_field name is used.
+  - <config_ref_field>: Field name in the config.json 'matchers' to use for this lookup.
+  - <input_field>:      Field name in the stdin JSON to get the value from.
+  - OUTPUT:             Keyword to start defining output field mappings.
+  - <source_field>:     Field name from the data source to append to the output.
+  - <target_field>:     New field name for the appended data. If "as <target_field>" is omitted,
+                        the source_field name is used.
 
 Examples:
   # 1. Basic Lookup
-  #    Lookup 'user_id' from stdin in 'users.csv' and append 'user_name' and 'email' as new fields.
-  $ cat input.jsonl | lookup-go -c lookup_config.json -m "user_id as id OUTPUT user_name as name, email"
+  #    Use the 'user_id_lookup' matcher from config.json, get the value from the 'uid' field in the input,
+  #    and append 'user_name' and 'email' as new fields.
+  $ cat input.jsonl | lookup-go -c lookup_config.json -m "user_id_lookup as uid OUTPUT user_name as name, email"
 
   # 2. Generate Config
   #    Generate a config template from 'users.csv'.
@@ -110,7 +111,7 @@ Examples:
 
   # 3. DNS Lookup
   #    Perform a DNS lookup for the IP address in the 'client_ip' field.
-  $ echo '{"client_ip":"8.8.8.8"}' | lookup-go --dns -m "client_ip as ip OUTPUT hostname"
+  $ echo '{"client_ip":"8.8.8.8"}' | lookup-go --dns -m "ip_lookup as client_ip OUTPUT hostname"
 
 `)
 	}
@@ -149,16 +150,17 @@ Examples:
 
 		for i := range config.Matchers {
 			m := &config.Matchers[i]
-			if m.InputField == mapping.InputField && m.LookupField == mapping.LookupField {
+			if m.InputField == mapping.ConfigRefField {
 				matcher = m
 				break
 			}
 		}
 		if matcher == nil {
-			log.Fatalf("Error: No matcher found in config for input_field='%s' and lookup_field='%s'", mapping.InputField, mapping.LookupField)
+			log.Fatalf("Error: No matcher found in config for input_field='%s'", mapping.ConfigRefField)
 		}
 
-		dataSourcePath := resolveDataSourcePath(*configFilePath, config.DataSource)
+	
+dataSourcePath := resolveDataSourcePath(*configFilePath, config.DataSource)
 		ext := filepath.Ext(dataSourcePath)
 		switch strings.ToLower(ext) {
 		case ".csv":
@@ -405,18 +407,21 @@ func resolveDataSourcePath(configPath, dataSource string) string {
 }
 
 func parseMapping(m string) (*Mapping, error) {
-	re := regexp.MustCompile(`^(\S+)\s+as\s+(\S+)(\s+OUTPUT\s+(.*))?$`)
+	// "A as B" または "A as B OUTPUT ..." の形式をパースする
+	// A: config.jsonのinput_fieldを指す
+	// B: 入力JSONのフィールド名
+	re := regexp.MustCompile(`^(\S+)\s+as\s+(\S+)(?:\s+OUTPUT\s+(.*))?$`)
 	matches := re.FindStringSubmatch(m)
 	if len(matches) < 3 {
-		return nil, fmt.Errorf("invalid mapping format: %s", m)
+		return nil, fmt.Errorf("invalid mapping format: must be '<config_ref_field> as <input_field> [OUTPUT ...]', got: %s", m)
 	}
 	mapping := &Mapping{
-		InputField:  matches[1],
-		LookupField: matches[2],
-		OutputMap:   make(map[string]string),
+		ConfigRefField: matches[1],
+		InputField:     matches[2],
+		OutputMap:      make(map[string]string),
 	}
-	if len(matches) > 4 && matches[4] != "" {
-		outputPairs := strings.Split(matches[4], ",")
+	if len(matches) > 3 && matches[3] != "" {
+		outputPairs := strings.Split(matches[3], ",")
 		for _, pair := range outputPairs {
 			pair = strings.TrimSpace(pair)
 			if pair == "" {

@@ -50,28 +50,28 @@ func TestBlackBox(t *testing.T) {
 	testCases := []blackBoxTestCase{
 		{
 			name:         "Exact Match with Field Renaming",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "user as username OUTPUT department as dept, role"},
+			args:         []string{"-c", "testdata/lookup_config.json", "-m", "user as user OUTPUT department as dept, role"},
 			inputFile:    "testdata/input.jsonl",
 			expectedFile: "testdata/exact_match.expected.jsonl",
 			isJsonL:      true,
 		},
 		{
 			name:         "Wildcard Match with All Fields",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "hostname as username"},
+			args:         []string{"-c", "testdata/lookup_config.json", "-m", "hostname as hostname"},
 			inputFile:    "testdata/input.jsonl",
 			expectedFile: "testdata/wildcard_match.expected.jsonl",
 			isJsonL:      true,
 		},
 		{
 			name:         "Regex Match",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "process as username"},
+			args:         []string{"-c", "testdata/lookup_config.json", "-m", "process as process"},
 			inputFile:    "testdata/input.jsonl",
 			expectedFile: "testdata/regex_match.expected.jsonl",
 			isJsonL:      true,
 		},
 		{
 			name:         "CIDR Match with JSON Array Input",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "client_ip as ip_range"},
+			args:         []string{"-c", "testdata/lookup_config.json", "-m", "client_ip as client_ip"},
 			inputFile:    "testdata/input_array.json",
 			expectedFile: "testdata/cidr_match_array.expected.json",
 			isJsonL:      false,
