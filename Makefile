@@ -6,7 +6,7 @@ SHELL = /bin/bash
 # --- Configuration ---
 
 # The name of the binary
-BINARY_NAME = lookup-go
+BINARY_NAME = lookup
 # The directory for all build artifacts
 BIN_DIR = ./bin
 

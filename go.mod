@@ -1,3 +1,3 @@
-module github.com/magifd2/lookup-go
+module github.com/nlink-jp/lookup
 
 go 1.25.0
