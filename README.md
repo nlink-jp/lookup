@@ -1,6 +1,6 @@
-# lookup-go: A Powerful CLI Lookup Tool
+# lookup: A Powerful CLI Lookup Tool
 
-`lookup-go` is a command-line utility inspired by Splunk's powerful `lookup` command. It enriches JSON data streams by adding fields based on matching values in an external data source (like a CSV or JSON file). It's designed to be a flexible and high-performance tool for data enrichment pipelines.
+`lookup` is a command-line utility inspired by Splunk's powerful `lookup` command. It enriches JSON data streams by adding fields based on matching values in an external data source (like a CSV or JSON file). It's designed to be a flexible and high-performance tool for data enrichment pipelines.
 
 The tool reads JSON objects (either as a JSON Array or as JSON Lines) from standard input, performs lookups based on sophisticated rules, and outputs the enriched JSON objects to standard output.
 
@@ -25,12 +25,12 @@ The tool reads JSON objects (either as a JSON Array or as JSON Lines) from stand
 
 ## Configuration Helper (`generate-config`)
 
-To make setup easier, `lookup-go` provides a helper command to generate a configuration template from your data file. It scans your CSV, JSON, or JSONL file and creates a valid `config.json` structure based on the headers or keys it finds.
+To make setup easier, `lookup` provides a helper command to generate a configuration template from your data file. It scans your CSV, JSON, or JSONL file and creates a valid `config.json` structure based on the headers or keys it finds.
 
 ### Usage
 
 ```sh
-./lookup-go generate-config -file <path_to_your_data_file>
+./lookup generate-config -file <path_to_your_data_file>
 ```
 
 -   **`-file <path>`**: The path to your data source file (e.g., `users.csv` or `data.jsonl`).
@@ -40,7 +40,7 @@ To make setup easier, `lookup-go` provides a helper command to generate a config
 Given a `users.csv` file with columns `username`, `department`, and `role`, the command:
 
 ```sh
-./lookup-go generate-config -file users.csv
+./lookup generate-config -file users.csv
 ```
 
 Will produce the following output, which you can save as your `config.json`:
@@ -80,7 +80,7 @@ You can then edit the `method` or other properties as needed.
 The basic command structure is:
 
 ```sh
-cat input.json | ./lookup-go -c <config.json> -m "<mapping_rule>"
+cat input.json | ./lookup -c <config.json> -m "<mapping_rule>"
 ```
 
 ### Command-Line Flags
@@ -96,7 +96,7 @@ cat input.json | ./lookup-go -c <config.json> -m "<mapping_rule>"
 
 ## Configuration (`config.json`)
 
-The configuration file is the heart of `lookup-go`, defining where your data is and how to match against it.
+The configuration file is the heart of `lookup`, defining where your data is and how to match against it.
 
 ### Structure
 
@@ -211,7 +211,7 @@ b-*,Engineering,QA,B,10.0.0.0/8
 Match the `user` field from the input using the `user_lookup` rule, and output the `department` and `role` fields.
 
 ```sh
-cat input.jsonl | ./lookup-go \
+cat input.jsonl | ./lookup \
   -c lookup_config.json \
   -m "user_lookup as user OUTPUT department as dept, role"
 ```
@@ -226,7 +226,7 @@ cat input.jsonl | ./lookup-go \
 Match the `client_ip` using the `ip_lookup` rule. We will omit the `OUTPUT` clause to add all fields from the matched CSV row.
 
 ```sh
-cat input.jsonl | ./lookup-go \
+cat input.jsonl | ./lookup \
   -c lookup_config.json \
   -m "ip_lookup as client_ip"
 ```
@@ -242,14 +242,14 @@ Perform a reverse DNS lookup on the `client_ip` field.
 
 **Command (using system resolver):**
 ```sh
-cat input.jsonl | ./lookup-go \
+cat input.jsonl | ./lookup \
   --dns \
   -m "dns_reverse_lookup as client_ip OUTPUT hostname as resolved_host"
 ```
 
 **Command (using a custom DNS server):**
 ```sh
-cat input.jsonl | ./lookup-go \
+cat input.jsonl | ./lookup \
   --dns \
   --dns-server "8.8.8.8" \
   -m "dns_reverse_lookup as client_ip OUTPUT hostname as resolved_host"
