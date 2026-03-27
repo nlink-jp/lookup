@@ -23,82 +23,17 @@ The tool reads JSON objects (either as a JSON Array or as JSON Lines) from stand
 
 ---
 
-## Configuration Helper (`generate-config`)
+## Installation
 
-To make setup easier, `lookup` provides a helper command to generate a configuration template from your data file. It scans your CSV, JSON, or JSONL file and creates a valid `config.json` structure based on the headers or keys it finds.
-
-### Usage
-
-```sh
-./lookup generate-config -file <path_to_your_data_file>
-```
-
--   **`-file <path>`**: The path to your data source file (e.g., `users.csv` or `data.jsonl`).
-
-### Example
-
-Given a `users.csv` file with columns `username`, `department`, and `role`, the command:
-
-```sh
-./lookup generate-config -file users.csv
-```
-
-Will produce the following output, which you can save as your `config.json`:
-
-```json
-{
-  "data_source": "users.csv",
-  "matchers": [
-    {
-      "input_field": "username",
-      "lookup_field": "username",
-      "method": "exact",
-      "case_sensitive": false
-    },
-    {
-      "input_field": "department",
-      "lookup_field": "department",
-      "method": "exact",
-      "case_sensitive": false
-    },
-    {
-      "input_field": "role",
-      "lookup_field": "role",
-      "method": "exact",
-      "case_sensitive": false
-    }
-  ]
-}
-```
-
-You can then edit the `method` or other properties as needed.
+Pre-compiled binaries for macOS, Windows, and Linux are available on the [Releases](https://github.com/nlink-jp/lookup/releases) page.
 
 ---
 
-## Usage
+## Configuration
 
-The basic command structure is:
+The configuration file defines where your data is and how to match against it.
 
-```sh
-cat input.json | ./lookup -c <config.json> -m "<mapping_rule>"
-```
-
-### Command-Line Flags
-
-| Flag           | Description                                                                                                                              | Required |
-| :------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :------- |
-| `-c <path>`    | Path to the JSON configuration file that defines the data source and matching rules.                                                     | Yes      |
-| `-m <string>`  | The mapping rule that specifies how to link input data to the lookup table. (See [Mapping Syntax](#mapping-syntax) below).               | Yes      |
-| `--dns`        | Enables DNS lookup mode. When used, the `-c` flag is ignored.                                                                            | No       |
-| `--dns-server` | (Optional) Specifies a custom DNS server for DNS lookups (e.g., `8.8.8.8` or `1.1.1.1:53`). If not set, the system's default resolver is used. | No       |
-
----
-
-## Configuration (`config.json`)
-
-The configuration file is the heart of `lookup`, defining where your data is and how to match against it.
-
-### Structure
+### Configuration File (`config.json`)
 
 ```json
 {
@@ -130,31 +65,85 @@ The configuration file is the heart of `lookup`, defining where your data is and
         -   `"cidr"`
     -   **`case_sensitive`**: (boolean, optional) If `true`, the match will be case-sensitive. Defaults to `false`. This applies to `exact`, `wildcard`, and `regex` methods.
 
+### Configuration Helper (`generate-config`)
+
+To make setup easier, `lookup` provides a helper command to generate a configuration template from your data file. It scans your CSV, JSON, or JSONL file and creates a valid `config.json` structure based on the headers or keys it finds.
+
+```sh
+./lookup generate-config -file <path_to_your_data_file>
+```
+
+-   **`-file <path>`**: The path to your data source file (e.g., `users.csv` or `data.jsonl`).
+
+**Example:** Given a `users.csv` file with columns `username`, `department`, and `role`:
+
+```sh
+./lookup generate-config -file users.csv
+```
+
+Output (save as `config.json` and edit as needed):
+
+```json
+{
+  "data_source": "users.csv",
+  "matchers": [
+    {
+      "input_field": "username",
+      "lookup_field": "username",
+      "method": "exact",
+      "case_sensitive": false
+    },
+    {
+      "input_field": "department",
+      "lookup_field": "department",
+      "method": "exact",
+      "case_sensitive": false
+    },
+    {
+      "input_field": "role",
+      "lookup_field": "role",
+      "method": "exact",
+      "case_sensitive": false
+    }
+  ]
+}
+```
+
 ---
 
-## Mapping Syntax (`-m` flag)
+## Usage
+
+The basic command structure is:
+
+```sh
+cat input.json | ./lookup -c <config.json> -m "<mapping_rule>"
+```
+
+### Command-Line Flags
+
+| Flag           | Description                                                                                                                              | Required |
+| :------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| `-c <path>`    | Path to the JSON configuration file that defines the data source and matching rules.                                                     | Yes      |
+| `-m <string>`  | The mapping rule that specifies how to link input data to the lookup table. (See [Mapping Syntax](#mapping-syntax) below).               | Yes      |
+| `--dns`        | Enables DNS lookup mode. When used, the `-c` flag is ignored.                                                                            | No       |
+| `--dns-server` | (Optional) Specifies a custom DNS server for DNS lookups (e.g., `8.8.8.8` or `1.1.1.1:53`). If not set, the system's default resolver is used. | No       |
+
+### Mapping Syntax
 
 The `-m` flag defines the link between the input stream and the lookup table, and controls the output.
-
-### Format
 
 ```
 "CONFIG_REF_FIELD as INPUT_FIELD [OUTPUT original_name1 as new_name1, original_name2 as new_name2]"
 ```
 
 -   **`CONFIG_REF_FIELD as INPUT_FIELD`**: (Required)
-    -   This part defines which matcher to use and which field from the input stream to get the value from.
     -   `CONFIG_REF_FIELD` must match an `input_field` in one of your matchers in `config.json`.
     -   `INPUT_FIELD` is the name of the field in the incoming JSON object to use for the lookup.
 -   **`OUTPUT ...`**: (Optional)
-    -   This clause controls which fields from the lookup file are added to the output and allows you to rename them.
-    -   If the `OUTPUT` clause is **omitted**, all columns from the matched row in the lookup file are added to the JSON object with their original names.
+    -   Controls which fields from the lookup file are added to the output and allows you to rename them.
+    -   If omitted, all columns from the matched row are added with their original names.
 
----
-
-## Examples
-
-### Setup
+### Examples
 
 Let's use the following files for our examples.
 
@@ -206,9 +195,7 @@ b-*,Engineering,QA,B,10.0.0.0/8
 {"timestamp": "2023-10-28T11:04:00Z", "client_ip": "8.8.8.8", "event": "external_access"}
 ```
 
-### Example 1: Case-Insensitive `exact` Match
-
-Match the `user` field from the input using the `user_lookup` rule, and output the `department` and `role` fields.
+#### Example 1: Case-Insensitive `exact` Match
 
 ```sh
 cat input.jsonl | ./lookup \
@@ -221,9 +208,7 @@ cat input.jsonl | ./lookup \
 {"dept":"Sales","event":"login","role":"Manager","timestamp":"2023-10-28T11:00:00Z","user":"JDOE"}
 ```
 
-### Example 2: `cidr` Match
-
-Match the `client_ip` using the `ip_lookup` rule. We will omit the `OUTPUT` clause to add all fields from the matched CSV row.
+#### Example 2: `cidr` Match
 
 ```sh
 cat input.jsonl | ./lookup \
@@ -236,9 +221,7 @@ cat input.jsonl | ./lookup \
 {"building":"B","client_ip":"10.20.30.40","department":"Engineering","event":"access","ip_range":"10.0.0.0/8","role":"QA","timestamp":"2023-10-28T11:03:00Z","username":"b-*"}
 ```
 
-### Example 3: DNS Lookup
-
-Perform a reverse DNS lookup on the `client_ip` field.
+#### Example 3: DNS Lookup
 
 **Command (using system resolver):**
 ```sh
@@ -259,3 +242,28 @@ cat input.jsonl | ./lookup \
 ```json
 {"client_ip":"8.8.8.8","event":"external_access","resolved_host":"dns.google","timestamp":"2023-10-28T11:04:00Z"}
 ```
+
+---
+
+## Building
+
+To build from source, you need Go and Make installed.
+
+```sh
+# Build for the current platform
+make build
+
+# Cross-compile for all platforms (Linux amd64/arm64, macOS amd64/arm64, Windows amd64)
+make build-all
+
+# Build all binaries and create .zip archives in dist/
+make package
+```
+
+The build artifacts will be placed in the `dist/` directory.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
