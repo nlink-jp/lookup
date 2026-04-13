@@ -65,13 +65,13 @@ func main() {
 
 	// カスタムのヘルプメッセージを設定
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, `lookup-go: Enrich JSON/JSONL data by looking up values from external data sources.
+		fmt.Fprintf(os.Stderr, `lookup: Enrich JSON/JSONL data by looking up values from external data sources.
 
 Usage:
-  lookup-go -c <config.json> -m "<mapping_rule>" < input.jsonl
-  lookup-go --dns -m "<mapping_rule>" < input.jsonl
-  lookup-go generate-config -file <data_source.csv/json> > config.json
-  lookup-go --version
+  lookup -c <config.json> -m "<mapping_rule>" < input.jsonl
+  lookup --dns -m "<mapping_rule>" < input.jsonl
+  lookup generate-config -file <data_source.csv/json> > config.json
+  lookup --version
 
 Description:
   This tool reads JSON or JSONL data from stdin, looks up values based on a specified field,
@@ -103,15 +103,15 @@ Examples:
   # 1. Basic Lookup
   #    Use the 'user_id_lookup' matcher from config.json, get the value from the 'uid' field in the input,
   #    and append 'user_name' and 'email' as new fields.
-  $ cat input.jsonl | lookup-go -c lookup_config.json -m "user_id_lookup as uid OUTPUT user_name as name, email"
+  $ cat input.jsonl | lookup -c lookup_config.json -m "user_id_lookup as uid OUTPUT user_name as name, email"
 
   # 2. Generate Config
   #    Generate a config template from 'users.csv'.
-  $ lookup-go generate-config -file users.csv > lookup_config.json
+  $ lookup generate-config -file users.csv > lookup_config.json
 
   # 3. DNS Lookup
   #    Perform a DNS lookup for the IP address in the 'client_ip' field.
-  $ echo '{"client_ip":"8.8.8.8"}' | lookup-go --dns -m "ip_lookup as client_ip OUTPUT hostname"
+  $ echo '{"client_ip":"8.8.8.8"}' | lookup --dns -m "ip_lookup as client_ip OUTPUT hostname"
 
 `)
 	}
@@ -120,7 +120,7 @@ Examples:
 	log.SetOutput(os.Stderr)
 
 	if *showVersion {
-		fmt.Printf("lookup-go version %s\n", version)
+		fmt.Printf("lookup version %s\n", version)
 		os.Exit(0)
 	}
 

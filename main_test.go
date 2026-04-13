@@ -13,10 +13,10 @@ import (
 )
 
 // testBinaryName is the name of the test binary that will be built.
-const testBinaryName = "test_lookup-go"
+const testBinaryName = "test_lookup"
 
 // TestMain is a special function that Go's testing package runs before any tests.
-// It's used here to build the actual 'lookup-go' binary once, so that all
+// It's used here to build the actual 'lookup' binary once, so that all
 // sub-tests can execute it as a black box.
 func TestMain(m *testing.M) {
 	// Build the binary
