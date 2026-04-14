@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-14
+
+### Changed
+
+- **Full reimplementation** — rewritten from scratch for testability and maintainability
+- Split monolithic main.go (636 lines) into 8 focused modules: config, match, source,
+  dns, process, generate, path, main
+- All core logic accepts io.Reader/io.Writer — fully unit-testable
+- DNS resolver abstracted behind interface for mock testing
+- Test coverage: 2.4% → 77% (52 tests, up from 9)
+- Architecture documentation added (docs/en/, docs/ja/)
+- Added README.ja.md, AGENTS.md, CLAUDE.md
+
+### Migration notes
+
+- CLI interface is **fully backward-compatible** — no flag changes
+- Config file format unchanged
+- Mapping rule syntax unchanged
+- All 4 matching methods (exact, wildcard, regex, cidr) behave identically
+- JSON Array and JSONL auto-detection preserved
+
 ## [1.4.3] - 2026-04-14
 
 ### Fixed

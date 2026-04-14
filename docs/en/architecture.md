@@ -41,46 +41,31 @@ data source file (CSV/JSON/JSONL)
   → output to stdout
 ```
 
-## Module Structure (new design)
+## Module Structure
 
 ```
-cmd/
-  root.go          CLI entry point, flag parsing, mode dispatch
-config/
-  config.go        Config struct, Load(io.Reader), Validate()
-  mapping.go       Mapping rule parser
-  path.go          Data source path resolution (~, relative)
-match/
-  matcher.go       Matcher interface + factory
-  exact.go         Exact string matching
-  wildcard.go      Glob-pattern matching (filepath.Match)
-  regex.go         Regex matching
-  cidr.go          CIDR network matching
-source/
-  loader.go        Data source interface
-  csv.go           CSV loader
-  json.go          JSON/JSONL loader
-dns/
-  resolver.go      DNS forward/reverse lookup, custom server
-process/
-  enricher.go      Core enrichment logic (processObject)
-  stream.go        Input format detection, JSONL/array I/O
-generate/
-  generate.go      generate-config subcommand
-main.go            Wires everything, calls cmd/
+main.go              CLI flags, execute(), mode dispatch
+config.go            Config/Matcher/Mapping structs, LoadConfig(), ParseMapping()
+match.go             FindMatch(), matchExact/Wildcard/Regex/CIDR
+source.go            LookupData type, LoadCSV(), LoadJSON(), LoadSource()
+dns.go               dnsResolver interface, dnsLookup(), newResolver()
+process.go           enrichObject(), processStream() (JSONL/Array auto-detect)
+generate.go          generateConfig(), extractCSVHeaders(), extractJSONKeys()
+path.go              ResolveDataSourcePath()
 ```
 
 ### Dependency Graph
 
 ```
-main.go
-  └── cmd/root.go
-        ├── config/          (config + mapping + path)
-        ├── source/          (CSV/JSON loading)
-        ├── match/           (matching algorithms)
-        ├── dns/             (DNS resolution)
-        ├── process/         (enrichment + I/O)
-        └── generate/        (config generation)
+main.go (CLI shell)
+  └── execute()
+        ├── config.go   (LoadConfig, ParseMapping, FindMatcher)
+        ├── path.go     (ResolveDataSourcePath)
+        ├── source.go   (LoadSource)
+        ├── match.go    (FindMatch)
+        ├── dns.go      (dnsLookup, newResolver)
+        ├── process.go  (enrichObject, processStream)
+        └── generate.go (generateConfig)
 ```
 
 No external dependencies. Standard library only.
@@ -101,13 +86,13 @@ reader ──► detectFormat()
     │                    │
     └────────┬───────────┘
              ▼
-     processObject(obj, mapping, lookupData, matcher, opts)
+     enrichObject(obj, mapping, data, matcher, dnsMode, resolver)
              │
      extract input field value
              │
       ┌──── DNS mode? ────┐
       ▼                   ▼
-  findMatch()      dnsLookup()
+  FindMatch()      dnsLookup()
       │                   │
       └────────┬──────────┘
                ▼
@@ -209,29 +194,30 @@ Custom server: `--dns-server 8.8.8.8` (port 53 appended if missing).
 
 ## Testing Strategy
 
-### Unit-testable Modules
+### Unit Tests
 
-| Module | What to Test |
-|--------|-------------|
-| `config/` | Config parsing, validation, mapping rule parsing, path resolution |
-| `match/` | Each matcher in isolation (exact, wildcard, regex, CIDR) |
-| `source/` | CSV/JSON/JSONL loading with io.Reader |
-| `dns/` | Resolver with mock net.Resolver |
-| `process/` | Enrichment logic with injected dependencies |
-| `generate/` | Key extraction from data sources |
+| Test File | Coverage |
+|-----------|----------|
+| `config_test.go` | Config parsing, FindMatcher, ParseMapping (100%) |
+| `match_test.go` | exact/wildcard/regex/cidr, case sensitivity, edge cases (100% core) |
+| `source_test.go` | CSV/JSON loading via io.Reader (93%+) |
+| `dns_test.go` | Mock resolver: forward/reverse, success/failure (100%) |
+| `process_test.go` | enrichObject, processStream JSONL/Array, malformed input |
+| `generate_test.go` | CSV/JSON key extraction, error cases (90%+) |
+| `path_test.go` | Path resolution: tilde, absolute, relative (100%) |
 
-### Integration Tests
+### Regression Tests
 
-Built binary with testdata files — preserves existing black-box test coverage.
+`main_test.go` runs `execute()` against existing `testdata/` files:
+- exact match with OUTPUT field mapping
+- wildcard match (all fields)
+- regex match
+- CIDR match (JSON array input/output)
 
-### Coverage Targets
+### Coverage
 
-| Module | Target |
-|--------|--------|
-| config/ | 90%+ |
-| match/ | 95%+ |
-| source/ | 90%+ |
-| dns/ | 70%+ (mock resolver) |
-| process/ | 85%+ |
-| generate/ | 80%+ |
-| **Overall** | **80%+** (up from 2.4%) |
+| Metric | Value |
+|--------|-------|
+| Overall | 77%+ |
+| Core logic (config, match, dns, path) | 95%+ |
+| main() / handleGenerateConfigCmd() | 0% (thin CLI shell) |

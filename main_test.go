@@ -3,204 +3,204 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
 
-// testBinaryName is the name of the test binary that will be built.
-const testBinaryName = "test_lookup"
-
-// TestMain is a special function that Go's testing package runs before any tests.
-// It's used here to build the actual 'lookup' binary once, so that all
-// sub-tests can execute it as a black box.
-func TestMain(m *testing.M) {
-	// Build the binary
-	buildCmd := exec.Command("go", "build", "-o", testBinaryName, ".")
-	if err := buildCmd.Run(); err != nil {
-		fmt.Printf("Failed to build test binary: %v\n", err)
-		os.Exit(1)
+// compareJSON compares two JSON strings by parsing and comparing maps.
+func compareJSON(t *testing.T, got, want string) {
+	t.Helper()
+	var gotObj, wantObj interface{}
+	if err := json.Unmarshal([]byte(got), &gotObj); err != nil {
+		t.Fatalf("could not parse got JSON: %v\ngot: %s", err, got)
 	}
-
-	// Run the tests
-	exitCode := m.Run()
-
-	// Clean up the binary
-	_ = os.Remove(testBinaryName)
-
-	os.Exit(exitCode)
-}
-
-// blackBoxTestCase defines a single black-box test case.
-	type blackBoxTestCase struct {
-		name          string   // Name of the test case
-		args          []string // Command-line arguments for the binary
-		inputFile     string   // Path to the input file to be piped to stdin
-		expectedFile  string   // Path to the file with the expected output
-		isJsonL       bool     // Whether the output is expected to be JSON Lines
+	if err := json.Unmarshal([]byte(want), &wantObj); err != nil {
+		t.Fatalf("could not parse want JSON: %v\nwant: %s", err, want)
 	}
-
-// TestBlackBox runs all the black-box test cases.
-func TestBlackBox(t *testing.T) {
-	// Define all test cases
-	testCases := []blackBoxTestCase{
-		{
-			name:         "Exact Match with Field Renaming",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "user as user OUTPUT department as dept, role"},
-			inputFile:    "testdata/input.jsonl",
-			expectedFile: "testdata/exact_match.expected.jsonl",
-			isJsonL:      true,
-		},
-		{
-			name:         "Wildcard Match with All Fields",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "hostname as hostname"},
-			inputFile:    "testdata/input.jsonl",
-			expectedFile: "testdata/wildcard_match.expected.jsonl",
-			isJsonL:      true,
-		},
-		{
-			name:         "Regex Match",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "process as process"},
-			inputFile:    "testdata/input.jsonl",
-			expectedFile: "testdata/regex_match.expected.jsonl",
-			isJsonL:      true,
-		},
-		{
-			name:         "CIDR Match with JSON Array Input",
-			args:         []string{"-c", "testdata/lookup_config.json", "-m", "client_ip as client_ip"},
-			inputFile:    "testdata/input_array.json",
-			expectedFile: "testdata/cidr_match_array.expected.json",
-			isJsonL:      false,
-		},
-	}
-
-	// Run each test case as a sub-test
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Read the input data
-			inputData, err := os.ReadFile(tc.inputFile)
-			if err != nil {
-				t.Fatalf("Failed to read input file %s: %v", tc.inputFile, err)
-			}
-
-			// Execute the command
-			cmd := exec.Command("./"+testBinaryName, tc.args...)
-			cmd.Stdin = bytes.NewReader(inputData)
-			output, err := cmd.CombinedOutput() // CombinedOutput captures both stdout and stderr
-			if err != nil {
-				t.Fatalf("Command execution failed: %v\nOutput:\n%s", err, string(output))
-			}
-
-			// Read the expected output
-			expectedOutput, err := os.ReadFile(tc.expectedFile)
-			if err != nil {
-				t.Fatalf("Failed to read expected output file %s: %v", tc.expectedFile, err)
-			}
-
-			// Compare the actual output with the expected output
-			if err := compareJSON(output, expectedOutput, tc.isJsonL); err != nil {
-				t.Errorf("Output does not match expected result: %v", err)
-				t.Logf("EXPECTED:\n%s\n", string(expectedOutput))
-				t.Logf("ACTUAL:\n%s\n", string(output))
-			}
-		})
+	if !reflect.DeepEqual(gotObj, wantObj) {
+		t.Errorf("JSON mismatch:\n  got:  %s\n  want: %s", got, want)
 	}
 }
 
-// compareJSON compares two JSON outputs for semantic equality.
-// It handles both standard JSON arrays/objects and JSON Lines.
-func compareJSON(actual, expected []byte, isJsonL bool) error {
-	if isJsonL {
-		return compareJSONLines(actual, expected)
+// --- Regression tests using testdata ---
+
+func TestRegression_ExactMatch(t *testing.T) {
+	input, _ := os.ReadFile("testdata/input.jsonl")
+	expected, _ := os.ReadFile("testdata/exact_match.expected.jsonl")
+
+	var buf bytes.Buffer
+	opts := options{
+		configFile: "testdata/lookup_config.json",
+		mappingStr: "user as user OUTPUT department as dept, role",
 	}
-	return compareSingleJSON(actual, expected)
+	if err := execute(opts, bytes.NewReader(input), &buf); err != nil {
+		t.Fatal(err)
+	}
+
+	gotLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	wantLines := strings.Split(strings.TrimSpace(string(expected)), "\n")
+
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("line count mismatch: got %d, want %d", len(gotLines), len(wantLines))
+	}
+	for i := range gotLines {
+		compareJSON(t, gotLines[i], wantLines[i])
+	}
 }
 
-// compareSingleJSON compares two single JSON objects/arrays.
-func compareSingleJSON(actual, expected []byte) error {
-	var actualObj, expectedObj interface{}
+func TestRegression_WildcardMatch(t *testing.T) {
+	input, _ := os.ReadFile("testdata/input.jsonl")
+	expected, _ := os.ReadFile("testdata/wildcard_match.expected.jsonl")
 
-	if err := json.Unmarshal(bytes.TrimSpace(actual), &actualObj); err != nil {
-		return fmt.Errorf("failed to unmarshal actual output: %w\nOutput: %s", err, string(actual))
+	var buf bytes.Buffer
+	opts := options{
+		configFile: "testdata/lookup_config.json",
+		mappingStr: "hostname as hostname",
 	}
-	if err := json.Unmarshal(bytes.TrimSpace(expected), &expectedObj); err != nil {
-		return fmt.Errorf("failed to unmarshal expected output: %w", err)
+	if err := execute(opts, bytes.NewReader(input), &buf); err != nil {
+		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(actualObj, expectedObj) {
-		return fmt.Errorf("JSON objects are not equal")
+	gotLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	wantLines := strings.Split(strings.TrimSpace(string(expected)), "\n")
+
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("line count mismatch: got %d, want %d", len(gotLines), len(wantLines))
 	}
-	return nil
+	for i := range gotLines {
+		compareJSON(t, gotLines[i], wantLines[i])
+	}
 }
 
-// compareJSONLines compares two sets of JSON Lines.
-func compareJSONLines(actual, expected []byte) error {
-	actualLines := strings.Split(strings.TrimSpace(string(actual)), "\n")
-	expectedLines := strings.Split(strings.TrimSpace(string(expected)), "\n")
+func TestRegression_RegexMatch(t *testing.T) {
+	input, _ := os.ReadFile("testdata/input.jsonl")
+	expected, _ := os.ReadFile("testdata/regex_match.expected.jsonl")
 
-	if len(actualLines) != len(expectedLines) {
-		return fmt.Errorf("mismatched line count: got %d, want %d", len(actualLines), len(expectedLines))
+	var buf bytes.Buffer
+	opts := options{
+		configFile: "testdata/lookup_config.json",
+		mappingStr: "process as process",
+	}
+	if err := execute(opts, bytes.NewReader(input), &buf); err != nil {
+		t.Fatal(err)
 	}
 
-	for i := range actualLines {
-		if err := compareSingleJSON([]byte(actualLines[i]), []byte(expectedLines[i])); err != nil {
-			return fmt.Errorf("mismatch on line %d: %w", i+1, err)
-		}
-	}
+	gotLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	wantLines := strings.Split(strings.TrimSpace(string(expected)), "\n")
 
-	return nil
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("line count mismatch: got %d, want %d", len(gotLines), len(wantLines))
+	}
+	for i := range gotLines {
+		compareJSON(t, gotLines[i], wantLines[i])
+	}
 }
 
-func TestResolveDataSourcePath(t *testing.T) {
-	// Get home directory for testing ~ expansion
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Could not get user home directory: %v", err)
+func TestRegression_CIDRMatchArray(t *testing.T) {
+	input, _ := os.ReadFile("testdata/input_array.json")
+	expected, _ := os.ReadFile("testdata/cidr_match_array.expected.json")
+
+	var buf bytes.Buffer
+	opts := options{
+		configFile: "testdata/lookup_config.json",
+		mappingStr: "client_ip as client_ip",
+	}
+	if err := execute(opts, bytes.NewReader(input), &buf); err != nil {
+		t.Fatal(err)
 	}
 
-	testCases := []struct {
-		name         string
-		configPath   string
-		dataSource   string
-		expectedPath string
+	// Compare as JSON arrays
+	compareJSON(t, buf.String(), string(expected))
+}
+
+// --- execute unit tests ---
+
+func TestExecute_MissingConfig(t *testing.T) {
+	err := execute(options{mappingStr: "x as x"}, strings.NewReader(""), nil)
+	if err == nil || !strings.Contains(err.Error(), "-c (config file) is required") {
+		t.Errorf("expected config required error, got: %v", err)
+	}
+}
+
+func TestExecute_InvalidMapping(t *testing.T) {
+	err := execute(options{mappingStr: "invalid"}, strings.NewReader(""), nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid mapping format") {
+		t.Errorf("expected mapping error, got: %v", err)
+	}
+}
+
+func TestExecute_ConfigNotFound(t *testing.T) {
+	err := execute(options{
+		configFile: "/nonexistent/config.json",
+		mappingStr: "x as x",
+	}, strings.NewReader(""), nil)
+	if err == nil {
+		t.Fatal("expected error for missing config")
+	}
+}
+
+func TestExecute_EmptyInput(t *testing.T) {
+	var buf bytes.Buffer
+	opts := options{
+		configFile: "testdata/lookup_config.json",
+		mappingStr: "user as user",
+	}
+	if err := execute(opts, strings.NewReader(""), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "" {
+		t.Errorf("expected empty output, got %q", buf.String())
+	}
+}
+
+// --- path resolution (ported from legacy tests) ---
+
+func TestResolveDataSourcePath_Cases(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	tests := []struct {
+		name      string
+		source    string
+		configDir string
+		want      string
 	}{
-		{
-			name:         "Tilde expansion",
-			configPath:   "/config/dir/config.json",
-			dataSource:   "~/data/users.csv",
-			expectedPath: filepath.Join(homeDir, "data/users.csv"),
-		},
-		{
-			name:         "Absolute path",
-			configPath:   "/config/dir/config.json",
-			dataSource:   "/abs/path/to/data.json",
-			expectedPath: "/abs/path/to/data.json",
-		},
-		{
-			name:         "Relative path",
-			configPath:   "/config/dir/config.json",
-			dataSource:   "../data/users.csv",
-			expectedPath: "/config/data/users.csv",
-		},
-		{
-			name:         "Relative path with dot",
-			configPath:   "/config/dir/config.json",
-			dataSource:   "./data/users.csv",
-			expectedPath: "/config/dir/data/users.csv",
-		},
+		{"relative", "./data.csv", "/etc/lookup", "/etc/lookup/data.csv"},
+		{"absolute", "/data/users.csv", "/etc/lookup", "/data/users.csv"},
+		{"tilde", "~/data.csv", "/etc/lookup", home + "/data.csv"},
+		{"just filename", "users.csv", "/etc/lookup", "/etc/lookup/users.csv"},
 	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			resolvedPath := resolveDataSourcePath(tc.configPath, tc.dataSource)
-			// Use filepath.Clean to normalize paths for comparison
-			if filepath.Clean(resolvedPath) != filepath.Clean(tc.expectedPath) {
-				t.Errorf("Expected path %s, but got %s", tc.expectedPath, resolvedPath)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolveDataSourcePath(tt.source, tt.configDir)
+			if got != tt.want {
+				t.Errorf("got %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+// --- generate-config test ---
+
+func TestGenerateConfig_CSVIntegration(t *testing.T) {
+	var buf bytes.Buffer
+	if err := generateConfig(&buf, "testdata/users.csv"); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(buf.Bytes(), &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	// users.csv has 5 columns: username,department,role,building,ip_range
+	if len(cfg.Matchers) != 5 {
+		names := make([]string, len(cfg.Matchers))
+		for i, m := range cfg.Matchers {
+			names[i] = m.InputField
+		}
+		sort.Strings(names)
+		t.Fatalf("expected 5 matchers for users.csv, got %d: %v", len(cfg.Matchers), names)
 	}
 }

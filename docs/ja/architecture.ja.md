@@ -41,46 +41,31 @@ stdin (JSON配列 or JSONL)
   → stdoutへ出力
 ```
 
-## モジュール構成（新設計）
+## モジュール構成
 
 ```
-cmd/
-  root.go          CLIエントリポイント、フラグ解析、モード分岐
-config/
-  config.go        Config構造体、Load(io.Reader)、Validate()
-  mapping.go       マッピングルールパーサー
-  path.go          データソースパス解決（~、相対パス）
-match/
-  matcher.go       Matcherインターフェース + ファクトリ
-  exact.go         完全一致マッチング
-  wildcard.go      グロブパターンマッチング (filepath.Match)
-  regex.go         正規表現マッチング
-  cidr.go          CIDRネットワークマッチング
-source/
-  loader.go        データソースインターフェース
-  csv.go           CSVローダー
-  json.go          JSON/JSONLローダー
-dns/
-  resolver.go      DNS正引き/逆引き、カスタムサーバー
-process/
-  enricher.go      コアエンリッチメントロジック (processObject)
-  stream.go        入力フォーマット検出、JSONL/配列I/O
-generate/
-  generate.go      generate-configサブコマンド
-main.go            全体の配線、cmd/を呼び出し
+main.go              CLIフラグ、execute()、モード分岐
+config.go            Config/Matcher/Mapping構造体、LoadConfig()、ParseMapping()
+match.go             FindMatch()、matchExact/Wildcard/Regex/CIDR
+source.go            LookupData型、LoadCSV()、LoadJSON()、LoadSource()
+dns.go               dnsResolverインターフェース、dnsLookup()、newResolver()
+process.go           enrichObject()、processStream()（JSONL/配列自動検出）
+generate.go          generateConfig()、extractCSVHeaders()、extractJSONKeys()
+path.go              ResolveDataSourcePath()
 ```
 
 ### 依存関係
 
 ```
-main.go
-  └── cmd/root.go
-        ├── config/          (設定 + マッピング + パス)
-        ├── source/          (CSV/JSON読み込み)
-        ├── match/           (マッチングアルゴリズム)
-        ├── dns/             (DNS解決)
-        ├── process/         (エンリッチメント + I/O)
-        └── generate/        (設定ファイル生成)
+main.go（CLIシェル）
+  └── execute()
+        ├── config.go   (LoadConfig, ParseMapping, FindMatcher)
+        ├── path.go     (ResolveDataSourcePath)
+        ├── source.go   (LoadSource)
+        ├── match.go    (FindMatch)
+        ├── dns.go      (dnsLookup, newResolver)
+        ├── process.go  (enrichObject, processStream)
+        └── generate.go (generateConfig)
 ```
 
 外部依存なし。標準ライブラリのみ。
@@ -101,13 +86,13 @@ reader ──► detectFormat()
     │                    │
     └────────┬───────────┘
              ▼
-     processObject(obj, mapping, lookupData, matcher, opts)
+     enrichObject(obj, mapping, data, matcher, dnsMode, resolver)
              │
      入力フィールド値を抽出
              │
       ┌──── DNSモード? ────┐
       ▼                   ▼
-  findMatch()      dnsLookup()
+  FindMatch()      dnsLookup()
       │                   │
       └────────┬──────────┘
                ▼
@@ -209,29 +194,30 @@ CIDR以外の全メソッドが`case_sensitive`フラグをサポート（デフ
 
 ## テスト戦略
 
-### ユニットテスト可能なモジュール
+### ユニットテスト
 
-| モジュール | テスト対象 |
-|-----------|-----------|
-| `config/` | 設定パース、バリデーション、マッピングルール解析、パス解決 |
-| `match/` | 各マッチャーの単体テスト（exact, wildcard, regex, CIDR） |
-| `source/` | io.ReaderでのCSV/JSON/JSONL読み込み |
-| `dns/` | モックnet.Resolverでのリゾルバ |
-| `process/` | 依存注入によるエンリッチメントロジック |
-| `generate/` | データソースからのキー抽出 |
+| テストファイル | カバレッジ |
+|--------------|-----------|
+| `config_test.go` | Config解析、FindMatcher、ParseMapping（100%） |
+| `match_test.go` | exact/wildcard/regex/cidr、大文字小文字、エッジケース（コア100%） |
+| `source_test.go` | io.ReaderでのCSV/JSON読み込み（93%+） |
+| `dns_test.go` | モックリゾルバ: 正引き/逆引き、成功/失敗（100%） |
+| `process_test.go` | enrichObject、processStream JSONL/配列、不正入力 |
+| `generate_test.go` | CSV/JSONキー抽出、エラーケース（90%+） |
+| `path_test.go` | パス解決: チルダ、絶対、相対（100%） |
 
-### 結合テスト
+### 回帰テスト
 
-ビルド済みバイナリ + testdataファイル — 既存のブラックボックステストカバレッジを維持。
+`main_test.go` が `execute()` 経由で既存 `testdata/` ファイルに対してテスト:
+- exact match（OUTPUTフィールドマッピング付き）
+- wildcard match（全フィールド出力）
+- regex match
+- CIDR match（JSON配列入出力）
 
-### カバレッジ目標
+### カバレッジ
 
-| モジュール | 目標 |
-|-----------|------|
-| config/ | 90%+ |
-| match/ | 95%+ |
-| source/ | 90%+ |
-| dns/ | 70%+（モックリゾルバ） |
-| process/ | 85%+ |
-| generate/ | 80%+ |
-| **全体** | **80%+**（現在の2.4%から向上） |
+| 指標 | 値 |
+|------|---|
+| 全体 | 77%+ |
+| コアロジック（config, match, dns, path） | 95%+ |
+| main() / handleGenerateConfigCmd() | 0%（薄いCLIシェル） |

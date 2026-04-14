@@ -264,6 +264,12 @@ The build artifacts will be placed in the `dist/` directory.
 
 ---
 
+## Documentation
+
+- [Architecture](docs/en/architecture.md) — Module structure, data flow, testing strategy
+- [アーキテクチャ](docs/ja/architecture.ja.md) — Japanese version
+- [日本語ドキュメント](README.ja.md)
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
