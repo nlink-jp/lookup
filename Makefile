@@ -2,6 +2,14 @@ BINARY  := lookup
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
+# macOS Developer ID signing / notarization (see nlink-jp/.github
+# CONVENTIONS.md §Code Signing). Defaults match any Developer ID
+# Application cert in the keychain and the org-standard notary
+# profile. Builds without these fall back to ad-hoc / un-notarized
+# with a one-line warning — see scripts/codesign-darwin.sh.
+CODESIGN_IDENTITY ?= Developer ID Application
+NOTARY_PROFILE    ?= nlink-jp-notary
+
 PLATFORMS := \
 	linux/amd64 \
 	linux/arm64 \
@@ -15,6 +23,7 @@ PLATFORMS := \
 build:
 	@mkdir -p dist
 	go build $(LDFLAGS) -o dist/$(BINARY) .
+	@scripts/codesign-darwin.sh dist/$(BINARY) "$(CODESIGN_IDENTITY)"
 
 ## build-all: Cross-compile for all target platforms
 build-all:
@@ -24,6 +33,8 @@ build-all:
 	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-amd64  .
 	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64  .
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-amd64.exe .
+	@scripts/codesign-darwin.sh dist/$(BINARY)-darwin-amd64 "$(CODESIGN_IDENTITY)"
+	@scripts/codesign-darwin.sh dist/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)"
 
 ## test: Run the full test suite
 test:
@@ -36,7 +47,7 @@ lint:
 ## check: Run lint + test + build-all
 check: lint test build-all
 
-## package: Build and package binaries as .zip archives for all platforms
+## package: Build and package binaries as .zip archives for all platforms, notarize darwin
 package: build-all
 	$(foreach platform,$(PLATFORMS), \
 		$(eval GOOS=$(word 1,$(subst /, ,$(platform)))) \
@@ -45,6 +56,8 @@ package: build-all
 		$(eval ARCHIVE=dist/$(BINARY)-$(VERSION)-$(GOOS)-$(GOARCH).zip) \
 		zip -j $(ARCHIVE) dist/$(BINARY)-$(GOOS)-$(GOARCH)$(EXT) LICENSE README.md ; \
 	)
+	@scripts/notarize-darwin.sh dist/$(BINARY)-$(VERSION)-darwin-amd64.zip "$(NOTARY_PROFILE)"
+	@scripts/notarize-darwin.sh dist/$(BINARY)-$(VERSION)-darwin-arm64.zip "$(NOTARY_PROFILE)"
 
 ## clean: Remove build artifacts
 clean:
