@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-12
+
+### Removed
+
+- **darwin/amd64 (Intel) pre-built binary.** macOS releases now ship
+  **arm64 only**, per the org-wide policy (darwin is Apple-Silicon only; no
+  universal binaries). Intel Mac users can build from source.
+
+### Changed
+
+- **Linux release archives are now `.tar.gz`** (darwin/windows remain `.zip`),
+  per `nlink-jp/.github` CONVENTIONS.md §Release Archive Standard. Archives
+  still bundle `LICENSE` + `README.md` alongside the canonical binary.
+- **darwin code-signature identifier** is now the canonical `lookup`
+  (was `lookup-darwin-arm64`), set via `codesign -i` so it stays stable
+  after the archived binary is renamed to its canonical name.
+
+No change to the binary's behaviour — a packaging / build-config release.
+
 ## [2.0.1] - 2026-05-23
 
 ### Changed

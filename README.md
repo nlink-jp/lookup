@@ -253,7 +253,7 @@ To build from source, you need Go and Make installed.
 # Build for the current platform
 make build
 
-# Cross-compile for all platforms (Linux amd64/arm64, macOS amd64/arm64, Windows amd64)
+# Cross-compile for all platforms (Linux amd64/arm64, macOS arm64, Windows amd64)
 make build-all
 
 # Build all binaries and create .zip archives in dist/
