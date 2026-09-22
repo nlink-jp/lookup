@@ -12,6 +12,6 @@ JSON data enrichment CLI tool — enriches JSON streams via CSV/JSON lookup tabl
 - **Matching**: exact, wildcard, regex, cidr (case_sensitive configurable)
 - **Build**: `make build` → `dist/lookup`
 - **Test**: `go test -race -cover ./...`
-- **Verify release**: `make verify-release` — gate: .notarized marker + freshness (run before upload)
+- **Verify release**: `make verify-release` — gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 - **Docs**: `docs/en/` (English), `docs/ja/` (Japanese)
 - **Module layout**: Flat (config.go, match.go, source.go, dns.go, process.go, generate.go, path.go)
