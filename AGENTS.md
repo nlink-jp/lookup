@@ -2,7 +2,7 @@
 
 JSON data enrichment CLI tool — enriches JSON streams via CSV/JSON lookup tables or DNS.
 
-- **Language**: Go 1.25+ (stdlib only, no external dependencies)
+- **Language**: Go 1.27.4+ (stdlib only, no external dependencies)
 - **Series**: util-series
 - **CLI**: `lookup -c <config.json> -m "<mapping>" < input.jsonl`
 - **CLI**: `lookup --dns -m "<mapping>" < input.jsonl`
