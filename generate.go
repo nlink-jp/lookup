@@ -20,7 +20,7 @@ func generateConfig(w io.Writer, dataPath string) error {
 	if err != nil {
 		return fmt.Errorf("could not open file %s: %w", dataPath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var keys []string
 	switch ext {

@@ -105,7 +105,9 @@ func TestProcessStream_JSONL(t *testing.T) {
 		t.Fatalf("expected 2 lines, got %d", len(lines))
 	}
 	var obj map[string]interface{}
-	json.Unmarshal([]byte(lines[0]), &obj)
+	if err := json.Unmarshal([]byte(lines[0]), &obj); err != nil {
+		t.Fatal(err)
+	}
 	if obj["enriched"] != "yes" {
 		t.Errorf("expected enriched=yes, got %v", obj["enriched"])
 	}

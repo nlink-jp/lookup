@@ -42,7 +42,7 @@ func execute(opts options, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("could not open config file: %w", err)
 		}
-		defer configReader.Close()
+		defer func() { _ = configReader.Close() }()
 
 		cfg, err := LoadConfig(configReader)
 		if err != nil {
@@ -123,7 +123,7 @@ Options:
 func handleGenerateConfigCmd() {
 	fs := flag.NewFlagSet("generate-config", flag.ExitOnError)
 	filePath := fs.String("file", "", "Path to the data source file (CSV or JSON).")
-	fs.Parse(os.Args[2:])
+	_ = fs.Parse(os.Args[2:])
 
 	if *filePath == "" {
 		log.Fatal("Error: -file flag is required for generate-config.")

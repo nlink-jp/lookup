@@ -62,7 +62,7 @@ func LoadSource(path string) (LookupData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not open data source %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {

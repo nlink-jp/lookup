@@ -109,7 +109,7 @@ func processJSONL(w io.Writer, data []byte, fn func(map[string]interface{}) map[
 			log.Printf("Warning: Could not marshal result to JSON, skipping: %v", err)
 			continue
 		}
-		fmt.Fprintln(w, string(out))
+		_, _ = fmt.Fprintln(w, string(out))
 	}
 	return scanner.Err()
 }
